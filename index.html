@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Piano Player</title>
+</head>
+<body>
+
+	<p>
+	### ライセンス<br>
+	**音源元：**[SalamanderGrandPiano](https://github.com/sfzinstruments/SalamanderGrandPiano/tree/master)
+	</p><br>
+	
+	<h1>My Piano But it`s on Vanilla JavaScript</h1>
+	
+	<br><br>
+    <button id="playBtn">Play Score</button>
+    <div id="status">Ready</div>
+    
+    <label for="volumeSlider">Master Volume:</label>
+    <input type="range" id="volumeSlider" min="0" max="10.0" step="0.01" value="1.0">
+    <span id="volumeValue">1.0</span>
+	
+	<br><br>
+	<div id="progress"></div> 
+	
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="player.js"></script>
+    <script src="main.js"></script>
+    <script src="script.js"></script>
+	
+</body>
+</html>
