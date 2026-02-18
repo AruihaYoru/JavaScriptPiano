@@ -110,7 +110,7 @@ class MyJavaScriptPiano {
         this.compressor = this.ctx.createDynamicsCompressor();
         this.compressor.threshold.value = -10; // -20dBを超えたら圧縮開始
         this.compressor.knee.value = 30;       // 滑らかに圧縮
-        this.compressor.ratio.value = 1;       // 圧縮比率
+        this.compressor.ratio.value = 4;       // 圧縮比率
         this.compressor.attack.value = 0.003;  // アタックの反応速度
         this.compressor.release.value = 0.25;  // リリース
 
