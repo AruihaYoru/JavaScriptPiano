@@ -1,5 +1,11 @@
+/**
+ * ショパン エチュード10-3「別れの曲」
+ * @description テキストベースで打ち込むために簡単なアレンジ
+ * @author 或いは夜
+ */
+ 
 window.myscore = [
-	// --- 1小節 ---
+    // --- 1小節 ---
     { note: 64, time: 0.0, duration: 0.8, velocity: 0.65 }, // Mel: E4
     { note: 28, time: 0.0, duration: 1.6, velocity: 0.55 }, // LH: E2
     { note: 47, time: 0.0, duration: 0.4, velocity: 0.45 }, // LH: B2

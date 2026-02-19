@@ -1,0 +1,17 @@
+body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f8f9fa; color: #333; display: flex; flex-direction: column; align-items: center; padding: 50px; }
+h1 { font-weight: 300; letter-spacing: 2px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+.controls { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); text-align: center; width: 100%; min-width: 80vw; }
+button { background-color: #333; color: white; border: none; padding: 12px 30px; font-size: 1rem; border-radius: 25px; cursor: pointer; transition: background 0.3s; margin-bottom: 20px; width: 100%; }
+button:hover { background-color: #555; }
+input[type="range"] { width: 100%; margin: 15px 0; }
+#status { font-size: 0.9rem; color: #666; margin-bottom: 10px; }
+#progress { height: 4px; background: #eee; width: 100%; border-radius: 2px; overflow: hidden; }
+#progress::after { content: ''; display: block; height: 100%; background: #333; width: 0%; transition: width 0.1s linear; }
+.license { font-size: 0.8rem; color: #999; margin-top: 30px; }
+label { display: block; font-size: 0.8rem; margin-bottom: 5px; text-align: left; }
+span#volumeValue::before { content: ":"; margin-right:1vw; }
+#volumeValue { margin-left: 0.5vw; }
+.source { margin:25px; }
+#scoreInput { width: 100%; font-family: 'Courier New', monospace; font-size: 0.85rem; padding: 10px; border: 1px solid #333; border-radius: 4px; background: #fff; color: #000; resize: vertical; }
+#updateBtn { margin-top: 10px; background-color: #444; }
+a { color:#0772cf; }
