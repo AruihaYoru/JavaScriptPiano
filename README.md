@@ -1,6 +1,11 @@
 # JavaScriptPiano
 ええと、Vanilla JSで動くきわめて高度なピアノシュミレーターです。  
-エラーハンドリングはほとんどありません。鳴らないなら、コンソールを見てください。
+エラーハンドリングはほとんどありません。鳴らないなら、コンソールを見てください。  
+**読み込み速度の改善のため、WASMとWorkerを使った高速wav読み込みを作ってあります（AI製）。`isWasmAvaible`がFalseになれば、純粋なVanillaJSのみのロジックに切り替わります。**
+<br>
+
+デモ：[JavaScriptPiano](https://aruihayoru.github.io/JavaScriptPiano) <br>
+練習曲作品10-3「別れの曲」（ショパン）にしたかったのですが、少々私には難しく「別れの曲をなぞったもの」になります。
 
 ## やったこと
 - 打鍵音、ペダル、ハンマーすべてを再現する。
@@ -49,7 +54,7 @@ git clone https://github.com/AruihaYoru/JavaScriptPiano.git
 
 # `window.myScore` データ構造仕様書
 
-`MyJavaScriptPiano` は、グローバル変数 `window.myScore` に格納された配列データを読み込み、演奏を行います。  
+`MyJavaScriptPiano` （というよりscript.jsは）は、グローバル変数 `window.myscore` に格納された配列データを読み込み、演奏を行います。  
 基本的には、main.jsに記述しておくことをおすすめします。その後、script.jsから呼び出されますので。
 
 ## 1. 基本構造

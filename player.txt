@@ -113,7 +113,7 @@ class MyJavaScriptPiano {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
 		
 		// ---------WASM-------
-        this.isWasmAvailable = true;
+        this.isWasmAvailable = false;
         this.wasmInstance = null;
 		// ---------E_WASM-------
 		
@@ -203,6 +203,68 @@ class MyJavaScriptPiano {
 	}
 	// ---------E_WASM-------
 	
+    /**
+     * 運指シミュレーション（脳）
+     * 譜面全体をスキャンし、物理的な移動距離と「手の交差コスト」を考慮して
+     * 左右どちらの手で弾くかを決定する。
+     */
+    _assignHands(score) {
+        // 仮想的な手の位置
+        let virtualL = 40; // E2付近
+        let virtualR = 70; // A#4付近
+
+        // 時間順、かつ同時刻なら音程順にソート
+        // これにより、和音の構成音を下から順に判定できる
+        const sortedScore = [...score].sort((a, b) => {
+            if (Math.abs(a.time - b.time) < 0.01) {
+                return a.note - b.note;
+            }
+            return a.time - b.time;
+        });
+
+        sortedScore.forEach(note => {
+            // 基本的な物理距離
+            const distL = Math.abs(note.note - virtualL);
+            const distR = Math.abs(note.note - virtualR);
+
+            // 領域バイアス
+            // 左手は低音(<=64)が好き、右手は高音(>64)が好き。
+            // 自分の領土から離れるほどコストが高くなる。
+            // これがないと、右手が暇な時に平気で最低音を取りに行ったりしてしまう。
+            const centerPoint = 64; // E4付近
+            const biasL = (note.note > centerPoint) ? (note.note - centerPoint) * 1.5 : 0;
+            const biasR = (note.note <= centerPoint) ? (centerPoint - note.note) * 1.5 : 0;
+
+            // 交差ペナルティ
+            // 「左手が右手の右側に行く」または「右手が左手の左側に行く」のは物理的に窮屈。
+            // 強い動機（距離が極端に近いなど）がない限り避ける。
+            const crossingCost = 15; // かなり重いコスト
+            let penaltyL = 0;
+            let penaltyR = 0;
+
+            // もしこのノートを左手で取ると、右手の現在位置を超えてしまうか？
+            if (note.note > virtualR) penaltyL += crossingCost;
+            
+            // もしこのノートを右手で取ると、左手の現在位置を超えてしまうか？
+            if (note.note < virtualL) penaltyR += crossingCost;
+
+            // 総合コスト計算
+            const totalCostL = distL + biasL + penaltyL;
+            const totalCostR = distR + biasR + penaltyR;
+
+            // コストが低い方の手を割り当てる
+            if (totalCostL < totalCostR) {
+                note.hand = 'left';
+                virtualL = note.note; // 仮想手を移動
+            } else {
+                note.hand = 'right';
+                virtualR = note.note; // 仮想手を移動
+            }
+        });
+        
+        return sortedScore;
+    }
+
     /**
      * ノートとベロシティから最適なファイル名とピッチ補正値を計算
      */
@@ -365,37 +427,27 @@ class MyJavaScriptPiano {
         // ペダルふみふみ
         ['pedalD1.wav', 'pedalD2.wav', 'pedalU1.wav', 'pedalU2.wav'].forEach(f => filesToLoad.add(f));
 
-
-        const files = Array.from(filesToLoad); // SetをArrayに変換
-        const totalFiles = files.length;
+        // ロード処理実行
+        const totalFiles = filesToLoad.size;
         let loadedCount = 0;
-        
-        // 同時に処理するファイル数。PCのコア数やネットワーク帯域に応じて調整
-        const concurrencyLimit = navigator.hardwareConcurrency || 4; 
 
-        // files配列を小さなチャンク（塊）に分割して処理する
-        for (let i = 0; i < totalFiles; i += concurrencyLimit) {
-            const chunk = files.slice(i, i + concurrencyLimit);
+        // 並列でロードしつつ、完了するたびにカウントアップ
+        const loadPromises = Array.from(filesToLoad).map(async (filename) => {
+            await this.loadBuffer(filename);
+            loadedCount++;
             
-            const loadPromises = chunk.map(async (filename) => {
-                await this.loadBuffer(filename);
-                loadedCount++;
-                
-                // 進捗コールバック呼び出し
-                if (this.onProgress) {
-                    this.onProgress(loadedCount, totalFiles, filename);
-                }
-            });
+            // 進捗コールバック呼び出し
+            if (this.onProgress) {
+                this.onProgress(loadedCount, totalFiles, filename);
+            }
+        });
 
-            // このチャンクの処理が終わるまで待つ
-            await Promise.all(loadPromises);
-        }
-        
+        await Promise.all(loadPromises);
         console.log(`Loaded ${totalFiles} samples.`);
     }
 
-	/**
-     * 運指シミュレーション
+		/**
+     * [New] 運指シミュレーション（脳内での事前の計画）
      * 譜面全体をスキャンし、物理距離と「手の交差コスト」を考慮して左右の手を割り当てる。
      */
     _assignHands(score) {
