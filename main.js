@@ -440,14 +440,12 @@ window.myscore = [
     { note: 47, time: 57.6, duration: 2.4, velocity: 0.25 }, // LH: B2
     { note: 52, time: 57.6, duration: 2.4, velocity: 0.20 }, // LH: E3
 
-// --- 41小節 (修正・拡張版) ---
-    // 低音のルートをしっかり鳴らしつつ、中高域で E Major の和音を優しく響かせます
-    { note: 28, time: 60.0, duration: 4.0, velocity: 0.15 }, // LH: E2 (深い基底音)
+	// --- 41小節 ---
+    { note: 28, time: 60.0, duration: 4.0, velocity: 0.15 }, // LH: E2
     { note: 40, time: 60.0, duration: 4.0, velocity: 0.12 }, // LH: E3
     { note: 52, time: 60.2, duration: 3.8, velocity: 0.10 }, // 内声: E4
     { note: 56, time: 60.4, duration: 3.6, velocity: 0.08 }, // 内声: G#4
     { note: 59, time: 60.6, duration: 3.4, velocity: 0.06 }, // 内声: B4
     
-    // 最後に、天から降ってくるようなかすかな高音を一点だけ追加
-    { note: 76, time: 61.5, duration: 2.5, velocity: 0.05 }  // Mel: E6 (消え入るようなフラジオレット風)
+    { note: 76, time: 61.5, duration: 2.5, velocity: 0.05 }  // Mel: E6 
 ];

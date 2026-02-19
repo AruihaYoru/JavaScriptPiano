@@ -192,14 +192,26 @@ class MyJavaScriptPiano {
      * Wasmの初期化
      */
 	async initWasm() {
-		// 並列Workerの生成
 		const workerPromises = [];
 		for (let i = 0; i < this.workerCount; i++) {
 			const w = new Worker('./wasm/decoder-worker.js', { type: 'module' });
-			w.onmessage = (e) => this._onWorkerMessage(e.data);
+			
+			// Workerが準備完了したことを知らせるPromiseを作成
+			const p = new Promise((resolve) => {
+				w.onmessage = (e) => {
+					if (e.data.type === 'ready') { // Worker側から 'ready' を送るよう修正が必要
+						resolve();
+					} else {
+						this._onWorkerMessage(e.data);
+					}
+				};
+			});
+			
 			this.workers.push(w);
+			workerPromises.push(p);
 		}
-		console.log(`✅ ${this.workerCount} Workers initialized.`);
+		await Promise.all(workerPromises);
+		console.log(`✅ ${this.workerCount} Workers initialized and ready.`);
 	}
 	// ---------E_WASM-------
 	
@@ -859,15 +871,19 @@ class MyJavaScriptPiano {
 
 // インスタンスをつくるっぴ！
 const piano = new MyJavaScriptPiano();
+window.piano = piano;
 
-async function init() {
-    const piano = new MyJavaScriptPiano();
-    await piano.initWasm(); 
-    
-    console.log("Wasm/Worker Ready!");
-    await piano.preloadScore(myscore);
+async function startPianoSystem() {
+    try {
+        await piano.initWasm(); 
+        console.log("✅ WASM Workers are ready.");
+    } catch (e) {
+        console.error("WASM initialization failed:", e);
+    }
 }
-init();
+
+// 初期化実行
+startPianoSystem();
 
 /*WASMじゃないやつ
 
