@@ -110,7 +110,9 @@ class HandAgent {
 
 class MyJavaScriptPiano {
 	constructor() {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)({
+			sampleRate: 44100
+		});
 		
 		// ---------WASM-------
         this.isWasmAvailable = true;
@@ -271,26 +273,28 @@ class MyJavaScriptPiano {
 		if (this.isWasmAvailable && worker) {
 			return new Promise((resolve) => {
 				const id = Math.random().toString(36).substring(2);
-				this.pendingRequests.set(id, resolve);
+				
+				this.pendingRequests.set(id, (audioBuffer) => {
+					this.buffers.set(path, audioBuffer);
+					resolve(audioBuffer);
+				});
 
 				this.workerIndex = (this.workerIndex + 1) % this.workers.length;
 				worker.postMessage({ id, arrayBuffer }, [arrayBuffer]);
 			});
 		} else {
-			console.log("Fallback to decodeAudioData:", path);
 			const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
 			this.buffers.set(path, audioBuffer);
 			return audioBuffer;
 		}
 	}
-	
+
 	_onWorkerMessage(data) {
 		const { id, pcm, count, chan } = data;
-		const resolve = this.pendingRequests.get(id);
-		if (!resolve) return;
+		const callback = this.pendingRequests.get(id);
+		if (!callback) return;
 
 		const audioBuffer = this.ctx.createBuffer(chan, count, this.ctx.sampleRate);
-		
 		for (let c = 0; c < chan; c++) {
 			const channelData = audioBuffer.getChannelData(c);
 			for (let i = 0; i < count; i++) {
@@ -299,7 +303,7 @@ class MyJavaScriptPiano {
 		}
 
 		this.pendingRequests.delete(id);
-		resolve(audioBuffer);
+		callback(audioBuffer);
 	}
 	
 	// ---------WASM-------
@@ -462,6 +466,18 @@ class MyJavaScriptPiano {
         if (this.ctx.state === 'suspended') {
             await this.ctx.resume();
         }
+
+		const isLoaded = score.every(note => {
+			const map = this.getSampleMapping(note.note, note.velocity || 0.5);
+			return this.buffers.has(map.filename);
+		});
+
+		if (!isLoaded) {
+			this.isLoading = true;
+			if (this.onProgress) this.onProgress(0, 1, "Initializing...");
+			await this.preloadScore(score);
+			this.isLoading = false;
+		}
 
         this.isLoading = true;
         if (this.onProgress) this.onProgress(0, 1, "Initializing...");

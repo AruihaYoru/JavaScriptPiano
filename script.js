@@ -1,13 +1,15 @@
 const playBtn = document.getElementById('playBtn');
 playBtn.addEventListener('click', async () => {
+    if (piano.isLoading) return;
+
     if (piano.ctx.state === 'suspended') {
         await piano.ctx.resume();
     }
-    console.log("Playing...");
-    piano.play(myscore);
+    console.log("Loading and Playing...");
+    await piano.play(myscore);
     
     playBtn.disabled = true;
-    setTimeout(() => { playBtn.disabled = false; }, 16000);
+    setTimeout(() => { playBtn.disabled = false; }, 16000); 
 });
 
 volumeSlider.addEventListener('input', (e) => {
