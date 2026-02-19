@@ -53,16 +53,15 @@ class HandAgent {
         this.currentKey = startKey;
         this.fatigue = 0.0;
         this.lastTime = 0;
+        // 各キーが最後に弾かれた時間を記録する
+        this.keyHistory = new Map();
     }
 
     /**
      * 手を移動させ、その負荷を計算する
-     * @param {number} nextKey - 次のノート番号
-     * @param {number} currentTime - 現在の絶対時間
-     * @param {number} velocity - 次の打鍵の強さ
      */
     move(nextKey, currentTime, velocity) {
-        // 時間経過による疲労回復 (1秒で0.3回復)
+        // 時間経過による疲労回復
         const deltaTime = currentTime - this.lastTime;
         this.fatigue = Math.max(0, this.fatigue - (deltaTime * 0.3));
         this.lastTime = currentTime;
@@ -70,33 +69,44 @@ class HandAgent {
         const distance = Math.abs(nextKey - this.currentKey);
         this.currentKey = nextKey;
 
-        // 距離の1.2乗に、疲労度を加算。疲れていると遠くへの移動が遅れる。
+        // 距離によるレイテンシ
         let latency = Math.pow(distance, 1.2) * 0.0005 * (1.0 + this.fatigue);
+		
+        // 同じ鍵盤、または極めて近い鍵盤を短期間で連打する場合、ハンマーが戻りきらない
+        let repetitionPenalty = 1.0;
+        const lastKeyTime = this.keyHistory.get(nextKey) || -10;
+        const noteDelta = currentTime - lastKeyTime;
+        
+        // 0.08秒以内の連打は物理的に厳しい
+        if (noteDelta < 0.08) {
+            // 速度が出ず、音がスカる
+            repetitionPenalty = 0.4 + (noteDelta * 5.0); // 0.08秒で0.8倍、0.04秒で0.6倍...
+            this.fatigue += 0.05;
+        }
+        this.keyHistory.set(nextKey, currentTime);
+
 
         // フォルテ(>0.8)の連打や、大きな跳躍(>7)で疲労が溜まる
         const stress = (velocity > 0.8 ? velocity * 0.05 : 0) + (distance > 7 ? 0.02 : 0);
         this.fatigue = Math.min(1.0, this.fatigue + stress);
 
-        // 跳躍距離と疲労度に応じて確率上昇。最大15%程度。
+        // 跳躍距離と疲労度に応じて確率上昇
         let mistouchProb = (distance > 5 ? 0.02 : 0) + (this.fatigue * 0.1);
         if (distance > 12) mistouchProb += 0.05; 
 		
-        // 疲れていると意図したより弱くなる、または制御が効かず強くなる(ばらつき)
         let velocityFluctuation = 1.0;
         if (this.fatigue > 0.5) {
             velocityFluctuation = 1.0 - (Math.random() * this.fatigue * 0.2); 
         }
 		
-		// 1オクターブ半こと12度も引けるやつがこんなミスり方するかといわれるとうーん		
-		
         return {
             latency: latency,
             mistouchProb: mistouchProb,
-            velocityScale: velocityFluctuation
+            // 連打ペナルティ
+            velocityScale: velocityFluctuation * repetitionPenalty
         };
     }
 }
-
 
 class MyJavaScriptPiano {
 	constructor() {
@@ -105,7 +115,20 @@ class MyJavaScriptPiano {
         // ノード作成
         this.masterGain = this.ctx.createGain();
         this.masterGain.gain.value = 0.5;
-
+		
+		// 共鳴用バスの作成
+        // ピアノの筐体鳴りをシミュレートするコンボルバーへのセンド
+		this.resonanceSend = this.ctx.createGain();
+        this.resonanceSend.gain.value = 0.0;
+		
+        // 床鳴りと空気感を意識したバッファに変更
+        this.bodyResonance = this.ctx.createConvolver();
+        this.bodyResonance.buffer = this._createReverbBuffer(3.0, 1.5, true);
+		
+        // 接続: ResonanceSend -> BodyResonance -> Master
+        this.resonanceSend.connect(this.bodyResonance);
+        this.bodyResonance.connect(this.masterGain);
+		
         // コンプレッサー作成
         this.compressor = this.ctx.createDynamicsCompressor();
         this.compressor.threshold.value = -10; // -20dBを超えたら圧縮開始
@@ -117,8 +140,8 @@ class MyJavaScriptPiano {
         // リバーブ作成
         this.convolver = this.ctx.createConvolver();
         // ホールのような残響
-        this.convolver.buffer = this._createReverbBuffer(2.0, 2.0); 
-        
+		this.convolver.buffer = this._createReverbBuffer(2.5, 2.0, false);
+		
         // リバーブの混ざり具合
         this.reverbGain = this.ctx.createGain();
         this.reverbGain.gain.value = 0.4;
@@ -143,6 +166,10 @@ class MyJavaScriptPiano {
         this.rightHand = new HandAgent(70);
         this.isLoading = false;
         this.onProgress = null; 
+		
+		// ダルの深さと、現在ダンパーが上がっているキーの管理
+        this.pedalDepth = 0.0;     // 0.0 ~ 1.0
+        this.heldKeys = new Set(); // 現在指で押さえているキー番号
     }
 
 
@@ -312,7 +339,7 @@ class MyJavaScriptPiano {
         console.log(`Loaded ${totalFiles} samples.`);
     }
 
-/**
+		/**
      * [New] 運指シミュレーション（脳内での事前の計画）
      * 譜面全体をスキャンし、物理距離と「手の交差コスト」を考慮して左右の手を割り当てる。
      */
@@ -488,9 +515,7 @@ class MyJavaScriptPiano {
                     triggerTime += 0.005; 
                 }
 
-                // 本番のノートをスケジュール
                 const playNote = {...note, velocity: actualVelocity};
-                // scheduleNote内で「爪ノイズ」や「共鳴」の判定を行う
                 this.scheduleNote(playNote, triggerTime, false);
             });
         });
@@ -499,152 +524,201 @@ class MyJavaScriptPiano {
         this.schedulePedal(startTime, 'D');
     }
 	
-    scheduleNote(noteData, when, isGhost = false) {
+	/**
+     * 共鳴とか音
+     */
+	scheduleNote(noteData, when, isGhost = false) {
         const velocity = noteData.velocity || 0.5;
+        const offVelocity = noteData.offVelocity || 0.5; 
+
+        // 押鍵状態の管理
+        setTimeout(() => {
+            this.heldKeys.add(noteData.note);
+        }, (when - this.ctx.currentTime) * 1000);
+
         const mapping = this.getSampleMapping(noteData.note, velocity);
         const buffer = this.buffers.get(mapping.filename);
         
         if (!buffer) return;
 
+        // シンパセティック・レゾナンス
+        if (!isGhost && velocity > 0.3) {
+            this._triggerSympatheticResonance(noteData.note, when, velocity);
+        }
+
         const source = this.ctx.createBufferSource();
         source.buffer = buffer;
         source.detune.value = mapping.detune;
+		
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        const cutoffFreq = 800 + (19200 * Math.pow(velocity, 2)); 
+        filter.frequency.setValueAtTime(cutoffFreq, when);
+
+		// 右のは右から聞こえる　左なら左
+        const panner = this.ctx.createStereoPanner();
+        const panValue = ((noteData.note - 21) / 87) * 1.8 - 0.9;
+        panner.pan.value = Math.max(-0.9, Math.min(0.9, panValue));
 
         const gainNode = this.ctx.createGain();
-        
-        // ベロシティノイズ (Ghostの場合はノイズを減らす)
         let noisyVelocity = isGhost ? velocity : velocity + (this.pinkNoise.getNext() * 0.0005);
         noisyVelocity = Math.max(0.01, Math.min(1.0, noisyVelocity));
 
-        // 音量カーブ
         const distFromCenter = Math.abs(noteData.note - 69);
         const positionFactor = 1.0 - (distFromCenter / 88) * 0.3;
-        const finalGain = Math.pow(noisyVelocity, 2) * positionFactor; // カーブ変更なし
+        const finalGain = Math.pow(noisyVelocity, 2) * positionFactor;
         
         // エンベロープ
-        gainNode.gain.setValueAtTime(0, when); // クリックノイズ防止のため0から
+        gainNode.gain.setValueAtTime(0, when);
         gainNode.gain.linearRampToValueAtTime(finalGain, when + 0.005);
         
         const releaseTime = when + noteData.duration;
+        
+        // ペダルが深く踏まれているほど、リリース後の減衰が長くなる
+        const currentPedal = this.pedalDepth || 0;
+        // 通常は0.2秒程度で消えるが、ペダルがあれば最大2.0秒くらい伸びる
+        const releaseTail = 0.2 + (currentPedal * 1.8);
+
+        // 離鍵時の処理をスケジュール
         gainNode.gain.setValueAtTime(finalGain, releaseTime - 0.05);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, releaseTime + 0.2);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, releaseTime + releaseTail);
 
-        source.connect(gainNode);
-        gainNode.connect(this.masterGain);
+        // リリース時にSetから削除
+        setTimeout(() => {
+            this.heldKeys.delete(noteData.note);
+        }, ((releaseTime + releaseTail) - this.ctx.currentTime) * 1000);
+
+
+        source.connect(filter);
+        filter.connect(gainNode);
+        gainNode.connect(panner);
+        panner.connect(this.masterGain);
+
+        const sendGain = this.ctx.createGain();
+        sendGain.gain.value = finalGain * 0.5; 
+        gainNode.connect(sendGain);
+        sendGain.connect(this.resonanceSend);
+
         source.start(when);
-        source.stop(releaseTime + 1.0);
-
-        // 爪が当たる高周波ノイズ
-        // 強い打鍵(>0.7) または ランダムな確率、かつゴーストノートでない場合
+        // バッファ再生停止もテールの長さを考慮
+        source.stop(releaseTime + releaseTail + 0.5);
+		
+		// 爪が当たってしまった！
         if (!isGhost && (noisyVelocity > 0.7 || Math.random() < 0.3)) {
             this._triggerNailNoise(when, noisyVelocity);
         }
-		// 余談だけど、ゴーストノートってMIDIを派手にするための音量0ノートって意味もありましたね。ごめんなさい。
-		
-        // 共鳴、ハーモニクス。
-        const resonanceChance = (1.0 - (distFromCenter / 100)) * noisyVelocity;
+		// 12度も手が開くなら爪切っとけっていう話ではあるな
 
-        if (!isGhost && Math.random() < (1.0 - (distFromCenter / 100)) * noisyVelocity && mapping.velIndex > 8) {
-            const harmFile = `harmV3${mapping.anchorNote}${mapping.octave}.wav`;
-            const harmBuffer = this.buffers.get(harmFile);
-            if (harmBuffer) {
-                const harmSource = this.ctx.createBufferSource();
-                harmSource.buffer = harmBuffer;
-                harmSource.detune.value = mapping.detune;
-                const harmGain = this.ctx.createGain();
-                harmGain.gain.value = finalGain * 0.15;
-                harmSource.connect(harmGain);
-                harmGain.connect(this.masterGain);
-                harmSource.start(when);
-                harmSource.stop(releaseTime + 1.0);
+        // ペダルを踏みっぱなしの時は、ダンパーが落ちないのでリリース音は鳴らない
+        if (currentPedal < 0.2) {
+            let keyIndex = noteData.note - 20;
+            if (keyIndex < 1) keyIndex = 1;
+            if (keyIndex > 88) keyIndex = 88;
+            const relBuffer = this.buffers.get(`rel${keyIndex}.wav`);
+            
+            if (relBuffer) {
+                const relSource = this.ctx.createBufferSource();
+                relSource.buffer = relBuffer;
+                const relGain = this.ctx.createGain();
+                const relVolume = 0.05 + (offVelocity * 0.15); 
+                relGain.gain.value = relVolume;
+                
+                const relPanner = this.ctx.createStereoPanner();
+                relPanner.pan.value = panValue;
+
+                relSource.connect(relGain);
+                relGain.connect(relPanner);
+                relPanner.connect(this.masterGain);
+                
+                relSource.start(releaseTime);
             }
         }
-
-        // リリースノイズ
-        let keyIndex = noteData.note - 20;
-        if (keyIndex < 1) keyIndex = 1;
-        if (keyIndex > 88) keyIndex = 88;
-        const relBuffer = this.buffers.get(`rel${keyIndex}.wav`);
-        
-        if (relBuffer) {
-            const relSource = this.ctx.createBufferSource();
-            relSource.buffer = relBuffer;
-            const relGain = this.ctx.createGain();
-            relGain.gain.value = 0.1 + (noisyVelocity * 0.05);
-            relSource.connect(relGain);
-            relGain.connect(this.masterGain);
-            relSource.start(releaseTime);
-        }
     }
+	
+	/**
+     * ペダル
+     */
+	schedulePedal(when, type, depth = null) {
+        const isDown = type === 'D';
+        // 指定がなければペダル全開/全閉、あればその値
+        let targetDepth = isDown ? 1.0 : 0.0;
+        if (depth !== null) targetDepth = depth;
 
-	schedulePedal(when, type) {
+        this.pedalDepth = targetDepth;
+
         const rr = Math.random() > 0.5 ? '1' : '2';
         const file = `pedal${type}${rr}.wav`;
         const buffer = this.buffers.get(file);
         
+        // 共鳴センド量を滑らかに変化させる（ハーフペダル表現）
+        // 完全に踏むと0.5、半分なら0.2くらい
+        const targetGain = targetDepth * 0.5;
+        this.resonanceSend.gain.setTargetAtTime(targetGain, when, 0.15);
+		
+        // ペダル機構音の再生
         if (buffer) {
             const source = this.ctx.createBufferSource();
             source.buffer = buffer;
             const gain = this.ctx.createGain();
-            gain.gain.value = 0.2;
+            // 踏む深さに応じてノイズ音量も変える
+            gain.gain.value = 0.2 * (Math.abs(this.pedalDepth - (isDown ? 0 : 1)) + 0.5);
             source.connect(gain);
             gain.connect(this.masterGain);
             source.start(when);
-			
-			const resonanceChance = 0.4;
-    
-			if (Math.random() < resonanceChance) {
-				// 共鳴用の音源
+
+            // ダンパーが一斉に開放される共鳴
+			if (isDown && this.pedalDepth > 0.3 && Math.random() < 0.4) {
 				const resSource = this.ctx.createBufferSource();
 				resSource.buffer = buffer; 
-				
 				const resGain = this.ctx.createGain();
-			
-                // 共鳴のばらつきをランダム生成
-				const fakeDistFromCenter = Math.random() * 30; 
-				
-				const resonanceDuration = 0.5 * (1.0 + (1.0 - Math.min(fakeDistFromCenter / 44, 1.0)) * 0.5);
-				
-                // ペダルを踏む強さをランダムにシミュレート
 				const fakeVelocity = 50 + (Math.random() * 40); 
-
-				resGain.gain.setValueAtTime(0.01 * (fakeVelocity / 127), when);
-				
-				// 自然に消えていくカーブを設定
-				resGain.gain.exponentialRampToValueAtTime(0.001, when + resonanceDuration);
-				
+				resGain.gain.setValueAtTime(0.01 * (fakeVelocity / 127) * this.pedalDepth, when);
+				resGain.gain.exponentialRampToValueAtTime(0.001, when + 1.0);
 				resSource.connect(resGain);
 				resGain.connect(this.masterGain);
-				
 				resSource.start(when);
-				resSource.stop(when + resonanceDuration);
 			}
         }
     }
 	
 	/**
-     * プログラム的にリバーブ用インパルスレスポンスを生成する
+     * 空気感と床鳴りのシミュレーション
+     * isBodyResonance: trueなら「重く、こもった」木の響きにする
      */
-    _createReverbBuffer(duration, decay) {
+    _createReverbBuffer(duration, decay, isBodyResonance = false) {
         const sampleRate = this.ctx.sampleRate;
         const length = sampleRate * duration;
         const impulse = this.ctx.createBuffer(2, length, sampleRate);
         const left = impulse.getChannelData(0);
         const right = impulse.getChannelData(1);
 
+        // 簡易ローパスフィルタ用の変数
+        let lastL = 0;
+        let lastR = 0;
+        // フィルタ係数（高いほど高音が削れる＝木や床っぽい）
+        const smoothing = isBodyResonance ? 0.6 : 0.15; 
+
         for (let i = 0; i < length; i++) {
-            // 指数関数減衰カーブ
             const n = i / length;
+            // 指数関数減衰カーブ
             const factor = Math.pow(1 - n, decay);
 
-            // ホワイトノイズ * 減衰カーブ
-            left[i] = (Math.random() * 2 - 1) * factor;
-            right[i] = (Math.random() * 2 - 1) * factor;
+            // ホワイトノイズ生成
+            let rawL = (Math.random() * 2 - 1);
+            let rawR = (Math.random() * 2 - 1);
+
+            // ローパス処理
+            rawL = lastL + (rawL - lastL) * (1.0 - smoothing);
+            rawR = lastR + (rawR - lastR) * (1.0 - smoothing);
+            lastL = rawL;
+            lastR = rawR;
+
+            left[i] = rawL * factor;
+            right[i] = rawR * factor;
         }
 
         return impulse;
     }
-	
 	
     /**
      * 爪が鍵盤に当たる「カチッ」という接触音を合成する
@@ -683,7 +757,49 @@ class MyJavaScriptPiano {
         noiseSrc.start(when);
     }
 	
-	
+	/**
+     * 倍音共鳴
+     */
+    _triggerSympatheticResonance(triggerNote, when, velocity) {
+        // オクターブ上、12度上、2オクターブ上
+        const harmonics = [12, 19, 24]; 
+
+        this.heldKeys.forEach(heldNote => {
+            if (heldNote === triggerNote) return;
+
+            // 低音弦の共鳴：弾いた音が、押さえている低音の「倍音」である場合
+            // 例: C2を押さえたまま、C3を弾いた -> C2の弦がC3の高さで鳴る
+            let isHarmonic = false;
+            let targetHarmonicDiff = triggerNote - heldNote;
+            
+            if (harmonics.includes(targetHarmonicDiff)) {
+                // 共鳴音を生成
+                const mapping = this.getSampleMapping(triggerNote, velocity * 0.3);
+                const buffer = this.buffers.get(mapping.filename);
+                if (buffer) {
+                    const src = this.ctx.createBufferSource();
+                    src.buffer = buffer;
+                    src.detune.value = mapping.detune;
+
+                    const g = this.ctx.createGain();
+                    const resVol = 0.1 * velocity; 
+                    g.gain.setValueAtTime(0, when);
+                    g.gain.linearRampToValueAtTime(resVol, when + 0.1);     // ゆっくり立ち上がる
+                    g.gain.exponentialRampToValueAtTime(0.001, when + 1.5); // 長く響く
+
+                    // ローパスで高域を削り「他人の空似」感を出す
+                    const f = this.ctx.createBiquadFilter();
+                    f.type = 'lowpass';
+                    f.frequency.value = 600;
+
+                    src.connect(f);
+                    f.connect(g);
+                    g.connect(this.resonanceSend); // 共鳴バスへ送る
+                    src.start(when);
+                }
+            }
+        });
+	}
 }
 
 // インスタンスをつくるっぴ！

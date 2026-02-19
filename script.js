@@ -4,7 +4,7 @@ playBtn.addEventListener('click', async () => {
         await piano.ctx.resume();
     }
     console.log("Playing...");
-    piano.play(myScore);
+    piano.play(myscore);
     
     playBtn.disabled = true;
     setTimeout(() => { playBtn.disabled = false; }, 16000);

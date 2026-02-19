@@ -1,4 +1,4 @@
-window.myScore = [
+window.myscore = [
     { note: 33, time: 0.0, duration: 8.0, velocity: 0.3 }, // A1 
     { note: 45, time: 1.0, duration: 7.0, velocity: 0.2 }, // A2
     { note: 57, time: 2.0, duration: 1.5, velocity: 0.4 }, // A3
