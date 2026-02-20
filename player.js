@@ -144,7 +144,7 @@ class MyJavaScriptPiano {
         this.compressor = this.ctx.createDynamicsCompressor();
         this.compressor.threshold.value = -10; // -20dBを超えたら圧縮開始
         this.compressor.knee.value = 30;       // 滑らかに圧縮
-        this.compressor.ratio.value = 4;       // 圧縮比率
+        this.compressor.ratio.value = 12;       // 圧縮比率
         this.compressor.attack.value = 0.003;  // アタックの反応速度
         this.compressor.release.value = 0.25;  // リリース
 
@@ -269,7 +269,12 @@ class MyJavaScriptPiano {
 		const arrayBuffer = await res.arrayBuffer();
 
 		const worker = this.workers[this.workerIndex];
-
+		
+		if (!res.ok) {
+            console.warn(`⚠️ Sample not found: ${path} (Status: ${res.status})`);
+            return null; 
+		}
+		
 		if (this.isWasmAvailable && worker) {
 			return new Promise((resolve) => {
 				const id = Math.random().toString(36).substring(2);
@@ -314,28 +319,26 @@ class MyJavaScriptPiano {
 		const wasm = this.wasmInstance;
 		const uint8Data = new Uint8Array(arrayBuffer);
 
-		// heapU8 が直接取れない場合のフォールバック
-		const heapU8 = wasm.HEAPU8 || new Uint8Array(wasm.instance.exports.memory.buffer);
-		const heapF32 = wasm.HEAPF32 || new Float32Array(wasm.instance.exports.memory.buffer);
-
-		// メモリ確保
+		// データの書き込み
 		const bufferPtr = wasm._malloc(uint8Data.length);
-		
-		// heapU8 を使ってデータを書き込む
-		heapU8.set(uint8Data, bufferPtr);
+		const currentHeapU8 = new Uint8Array(wasm.instance.exports.memory.buffer);
+		currentHeapU8.set(uint8Data, bufferPtr);
 
 		const countPtr = wasm._malloc(4);
 		const chanPtr = wasm._malloc(4);
 
+		// デコード実行
 		const floatPtr = wasm._decode_wav(bufferPtr, uint8Data.length, countPtr, chanPtr);
 
 		if (floatPtr === 0) throw new Error("Wasm decoding failed");
 
+		const liveBuffer = wasm.instance.exports.memory.buffer;
+
 		const sampleCount = wasm.getValue(countPtr, 'i32');
 		const channels = wasm.getValue(chanPtr, 'i32');
 		
-		// デコード結果の取得（ここも heapF32 を使用）
-		const rawData = new Float32Array(heapF32.buffer, floatPtr, sampleCount * channels);
+		// Viewを作成
+		const rawData = new Float32Array(liveBuffer, floatPtr, sampleCount * channels);
 		const audioBuffer = this.ctx.createBuffer(channels, sampleCount, this.ctx.sampleRate);
 
 		for (let ch = 0; ch < channels; ch++) {
@@ -481,10 +484,6 @@ class MyJavaScriptPiano {
 
         this.isLoading = true;
         if (this.onProgress) this.onProgress(0, 1, "Initializing...");
-
-        // サンプルロード
-        await this.preloadScore(score);
-        this.isLoading = false;
 
         // 運指決定
         // ここで各ノートに .hand = 'left' ﾊﾟｲﾌﾟ 'right' が付与される
@@ -687,7 +686,7 @@ class MyJavaScriptPiano {
         source.stop(releaseTime + releaseTail + 0.5);
 		
 		// 爪が当たってしまった！
-        if (!isGhost && (noisyVelocity > 0.7 || Math.random() < 0.3)) {
+        if (!isGhost && (noisyVelocity > 0.7 || Math.random() < 0.1)) {
             this._triggerNailNoise(when, noisyVelocity);
         }
 		// 12度も手が開くなら爪切っとけっていう話ではあるな
@@ -703,7 +702,8 @@ class MyJavaScriptPiano {
                 const relSource = this.ctx.createBufferSource();
                 relSource.buffer = relBuffer;
                 const relGain = this.ctx.createGain();
-                const relVolume = 0.05 + (offVelocity * 0.15); 
+                const relVolume = 0.01 + (offVelocity * 0.1); 
+				// 0.01の意味は？（ほぼ）ない！（調整にいるから、まあ多少はね？）
                 relGain.gain.value = relVolume;
                 
                 const relPanner = this.ctx.createStereoPanner();
