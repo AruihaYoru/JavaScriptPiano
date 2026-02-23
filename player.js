@@ -14,6 +14,179 @@
  * attribution to the original sample author and engine author is maintained.
  */
 
+/**
+ * ========== CONFIGURATION & CONSTANTS SECTION ==========
+ * All magic numbers are centralized here for easy tuning
+ */
+const PIANO_CONFIG = {
+    // Audio Context
+    SAMPLE_RATE: 44100,
+    
+    // Master Gain & Levels
+    MASTER_GAIN: 0.5,
+    RESONANCE_SEND_INIT: 0.0,
+    REVERB_GAIN: 0.4,
+    
+    // Compressor Settings
+    COMPRESSOR_THRESHOLD: -10,
+    COMPRESSOR_KNEE: 30,
+    COMPRESSOR_RATIO: 12,
+    COMPRESSOR_ATTACK: 0.003,
+    COMPRESSOR_RELEASE: 0.25,
+    
+    // Reverb & Resonance
+    REVERB_DURATION: 2.5,
+    REVERB_DECAY: 2.0,
+    BODY_RESONANCE_DURATION: 3.0,
+    BODY_RESONANCE_DECAY: 1.5,
+    BODY_RESONANCE_SMOOTH: 0.6,
+    REVERB_SMOOTH: 0.15,
+    
+    // Hand Agent Initial Positions
+    LEFT_HAND_START: 40,
+    RIGHT_HAND_START: 70,
+    
+    // WASM Configuration
+    ENABLE_WASM: true,
+    WORKER_COUNT: navigator.hardwareConcurrency || 4,
+    WASM_WORKER_PATH: './wasm/decoder-worker.js',
+    
+    // Fatigue & Stress (HandAgent)
+    FATIGUE_RECOVERY_RATE: 0.3,
+    DISTANCE_EXPONENT: 1.2,
+    LATENCY_COEFFICIENT: 0.0005,
+    REPETITION_THRESHOLD: 0.08,
+    REPETITION_PENALTY_BASE: 0.4,
+    REPETITION_PENALTY_MULTIPLIER: 5.0,
+    REPETITION_FATIGUE_ADD: 0.05,
+    FORTE_THRESHOLD: 0.8,
+    FORTE_STRESS: 0.05,
+    LARGE_JUMP_THRESHOLD: 7,
+    LARGE_JUMP_STRESS: 0.02,
+    VERY_LARGE_JUMP_THRESHOLD: 12,
+    VERY_LARGE_JUMP_MIS_PROB: 0.05,
+    MEDIUM_JUMP_THRESHOLD: 5,
+    MEDIUM_JUMP_MIS_PROB: 0.02,
+    FATIGUE_VELOCITY_THRESHOLD: 0.5,
+    FATIGUE_VELOCITY_FACTOR: 0.2,
+    MAX_FATIGUE: 1.0,
+    MISTOUCHED_VELOCITY_FACTOR: 0.85,
+    
+    // Hand Assignment
+    TIME_TOLERANCE: 0.01,
+    LEFT_HAND_HOME: 45,
+    RIGHT_HAND_HOME: 75,
+    CENTER_POINT: 64,
+    REGION_BIAS_FACTOR: 1.2,
+    CROSSING_COST: 20,
+    
+    // Sample Mapping
+    MIDI_VELOCITY_BINS: 16,
+    DETUNE_CENT: 100,
+    DETUNE_OCTAVE_OFFSET: 1,
+    MIDI_MIDDLE_C: 60,
+    MIDI_BASE_OCTAVE: -1,
+    FIRST_KEY_MIDI: 21,
+    LAST_KEY_MIDI: 108,
+    KEY_OFFSET_FOR_RELEASE: 20,
+    MIN_KEY_INDEX: 1,
+    MAX_KEY_INDEX: 88,
+    MIN_HARMONICS_VELOCITY: 0.6,
+    
+    // Pink Noise
+    PINK_NOISE_MAX_KEY: 0x1f,
+    PINK_NOISE_RANGE: 128,
+    PINK_NOISE_BINS: 5,
+    
+    // Play & Timing
+    PLAY_START_OFFSET: 0.5,
+    SILENCE_THRESHOLD: 2.0,
+    FIRST_NOTE_TENSION_BASE: 0.005,
+    FIRST_NOTE_TENSION_RANDOM: 0.025,
+    FIRST_NOTE_VELOCITY_BASE: 0.9,
+    FIRST_NOTE_VELOCITY_RANGE: 0.2,
+    PINK_NOISE_TIMING_FACTOR: 0.0002,
+    
+    // Note Scheduling
+    DEFAULT_VELOCITY: 0.5,
+    DEFAULT_OFF_VELOCITY: 0.5,
+    RESONANCE_VELOCITY_THRESHOLD: 0.3,
+    SYMPATHETIC_VELOCITY_FACTOR: 0.3,
+    GAIN_RAMP_TIME: 0.005,
+    FILTER_LOWPASS_BASE: 800,
+    FILTER_LOWPASS_VELOCITY_RANGE: 19200,
+    PIANO_RANGE_FIRST_KEY: 21,
+    PIANO_RANGE_KEYS: 87,
+    PAN_RANGE: 1.8,
+    PAN_CENTER: 0.9,
+    PAN_MIN: -0.9,
+    PAN_MAX: 0.9,
+    PINK_NOISE_VELOCITY_FACTOR: 0.0005,
+    VELOCITY_NOISE_MAX: 1.0,
+    VELOCITY_NOISE_MIN: 0.01,
+    CENTER_KEY_MIDI: 69,
+    POSITION_FACTOR_RANGE: 0.3,
+    VELOCITY_CURVE_EXPONENT: 2,
+    RELEASE_TIME_BASE: 0.2,
+    RELEASE_TIME_PEDAL_FACTOR: 1.8,
+    RELEASE_MIN_FADED: 0.001,
+    RELEASE_FADED_FROM: 0.05,
+    RELEASE_GAIN_ENVELOPE: 0.5,
+    OFF_VELOCITY_RANGE: 0.1,
+    OFF_VELOCITY_BASE: 0.01,
+    PEDAL_THRESHOLD_FOR_RELEASE: 0.2,
+    NAIL_NOISE_THRESHOLD: 0.7,
+    NAIL_NOISE_RANDOM_PROB: 0.1,
+    NAIL_NOISE_BUFFER_TIME: 0.02,
+    NAIL_NOISE_FILTER_FREQ: 2500,
+    NAIL_NOISE_GAIN: 0.05,
+    NAIL_NOISE_FADE_TIME: 0.01,
+    NAIL_NOISE_MIN: 0.001,
+    
+    // Crossing Stress
+    CROSSING_STRESS: 0.015,
+    CROSSING_MIS_PROB_ADD: 0.15,
+    
+    // Chord Spreading
+    CHORD_SPREAD_BASE: 0.008,
+    CHORD_SPREAD_RANDOM: 0.005,
+    
+    // Mistouching
+    GHOST_NOTE_VELOCITY_FACTOR: 0.2,
+    GHOST_NOTE_VELOCITY_MIN: 0.05,
+    GHOST_NOTE_DURATION: 0.08,
+    GHOST_NOTE_LEAD_TIME: 0.015,
+    MISTOUCHED_TIMING_DELAY: 0.005,
+    
+    // Sympathetic Resonance
+    HARMONICS: [12, 19, 24],
+    SYMPATHETIC_VELOCITY_FACTOR: 0.3,
+    SYMPATHETIC_RISE_TIME: 0.1,
+    SYMPATHETIC_RING_TIME: 1.5,
+    SYMPATHETIC_FILTER_FREQ: 600,
+    SYMPATHETIC_GAIN_FACTOR: 0.1,
+    
+    // Pedal
+    PEDAL_GAIN_MULTIPLIER: 0.5,
+    PEDAL_TIME_CONSTANT: 0.15,
+    PEDAL_NOISE_GAIN: 0.2,
+    PEDAL_RESONANCE_THRESHOLD: 0.3,
+    PEDAL_RESONANCE_PROB: 0.4,
+    FAKE_VELOCITY_MIN: 50,
+    FAKE_VELOCITY_RANGE: 40,
+    PEDAL_RESONANCE_GAIN: 0.01,
+    PEDAL_RESONANCE_DENORM: 127,
+    PEDAL_RESONANCE_RING: 1.0,
+    
+    // File Paths
+    BASE_PATH: './44.1khz16bit',
+    PEDAL_FILES: ['pedalD1.wav', 'pedalD2.wav', 'pedalU1.wav', 'pedalU2.wav']
+};
+
+/**
+ * ========== END CONFIGURATION SECTION ==========
+ */
+
 
 
 /**
@@ -22,10 +195,10 @@
  */
 class PinkNoise {
     constructor() {
-        this.maxKey = 0x1f;
+        this.maxKey = PIANO_CONFIG.PINK_NOISE_MAX_KEY;
         this.key = 0;
-        this.whiteValues = [0, 0, 0, 0, 0];
-        this.range = 128;
+        this.whiteValues = new Array(PIANO_CONFIG.PINK_NOISE_BINS).fill(0);
+        this.range = PIANO_CONFIG.PINK_NOISE_RANGE;
     }
 
     getNext() {
@@ -33,13 +206,13 @@ class PinkNoise {
         this.key = (this.key + 1) & this.maxKey;
         const diff = lastKey ^ this.key;
         let sum = 0;
-        for (let i = 0; i < 5; i++) {
+        for (let i = 0; i < PIANO_CONFIG.PINK_NOISE_BINS; i++) {
             if (diff & (1 << i)) {
                 this.whiteValues[i] = (Math.random() * 2 - 1) * this.range;
             }
             sum += this.whiteValues[i];
         }
-        return sum / 5;
+        return sum / PIANO_CONFIG.PINK_NOISE_BINS;
     }
 }
 // ピンクノイズともいう、生物的にここちよいノイズ。
@@ -63,40 +236,41 @@ class HandAgent {
     move(nextKey, currentTime, velocity) {
         // 時間経過による疲労回復
         const deltaTime = currentTime - this.lastTime;
-        this.fatigue = Math.max(0, this.fatigue - (deltaTime * 0.3));
+        this.fatigue = Math.max(0, this.fatigue - (deltaTime * PIANO_CONFIG.FATIGUE_RECOVERY_RATE));
         this.lastTime = currentTime;
 		
         const distance = Math.abs(nextKey - this.currentKey);
         this.currentKey = nextKey;
 
         // 距離によるレイテンシ
-        let latency = Math.pow(distance, 1.2) * 0.0005 * (1.0 + this.fatigue);
+        let latency = Math.pow(distance, PIANO_CONFIG.DISTANCE_EXPONENT) * PIANO_CONFIG.LATENCY_COEFFICIENT * (1.0 + this.fatigue);
 		
         // 同じ鍵盤、または極めて近い鍵盤を短期間で連打する場合、ハンマーが戻りきらない
         let repetitionPenalty = 1.0;
         const lastKeyTime = this.keyHistory.get(nextKey) || -10;
         const noteDelta = currentTime - lastKeyTime;
         
-        // 0.08秒以内の連打は物理的に厳しい
-        if (noteDelta < 0.08) {
+        // 連打のしきい値以内の連打は物理的に厳しい
+        if (noteDelta < PIANO_CONFIG.REPETITION_THRESHOLD) {
             // 速度が出ず、音がスカる
-            repetitionPenalty = 0.4 + (noteDelta * 5.0); // 0.08秒で0.8倍、0.04秒で0.6倍...
-            this.fatigue += 0.05;
+            repetitionPenalty = PIANO_CONFIG.REPETITION_PENALTY_BASE + (noteDelta * PIANO_CONFIG.REPETITION_PENALTY_MULTIPLIER);
+            this.fatigue += PIANO_CONFIG.REPETITION_FATIGUE_ADD;
         }
         this.keyHistory.set(nextKey, currentTime);
 
-
         // フォルテ(>0.8)の連打や、大きな跳躍(>7)で疲労が溜まる
-        const stress = (velocity > 0.8 ? velocity * 0.05 : 0) + (distance > 7 ? 0.02 : 0);
-        this.fatigue = Math.min(1.0, this.fatigue + stress);
+        const stress = (velocity > PIANO_CONFIG.FORTE_THRESHOLD ? velocity * PIANO_CONFIG.FORTE_STRESS : 0) + 
+                       (distance > PIANO_CONFIG.LARGE_JUMP_THRESHOLD ? PIANO_CONFIG.LARGE_JUMP_STRESS : 0);
+        this.fatigue = Math.min(PIANO_CONFIG.MAX_FATIGUE, this.fatigue + stress);
 
         // 跳躍距離と疲労度に応じて確率上昇
-        let mistouchProb = (distance > 5 ? 0.02 : 0) + (this.fatigue * 0.1);
-        if (distance > 12) mistouchProb += 0.05; 
+        let mistouchProb = (distance > PIANO_CONFIG.MEDIUM_JUMP_THRESHOLD ? PIANO_CONFIG.MEDIUM_JUMP_MIS_PROB : 0) + 
+                           (this.fatigue * 0.1);
+        if (distance > PIANO_CONFIG.VERY_LARGE_JUMP_THRESHOLD) mistouchProb += PIANO_CONFIG.VERY_LARGE_JUMP_MIS_PROB;
 		
         let velocityFluctuation = 1.0;
-        if (this.fatigue > 0.5) {
-            velocityFluctuation = 1.0 - (Math.random() * this.fatigue * 0.2); 
+        if (this.fatigue > PIANO_CONFIG.FATIGUE_VELOCITY_THRESHOLD) {
+            velocityFluctuation = 1.0 - (Math.random() * this.fatigue * PIANO_CONFIG.FATIGUE_VELOCITY_FACTOR); 
         }
 		
         return {
@@ -111,30 +285,30 @@ class HandAgent {
 class MyJavaScriptPiano {
 	constructor() {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)({
-			sampleRate: 44100
+			sampleRate: PIANO_CONFIG.SAMPLE_RATE
 		});
 		
 		// ---------WASM-------
-        this.isWasmAvailable = true;
+        this.isWasmAvailable = PIANO_CONFIG.ENABLE_WASM;
         this.wasmInstance = null;
 		// ---------E_WASM-------
 		
-		/*
-		this.isWasmAvailable = false;
-		*/
-		
         // ノード作成
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.5;
+        this.masterGain.gain.value = PIANO_CONFIG.MASTER_GAIN;
 		
 		// 共鳴用バスの作成
         // ピアノの筐体鳴りをシミュレートするコンボルバーへのセンド
 		this.resonanceSend = this.ctx.createGain();
-        this.resonanceSend.gain.value = 0.0;
+        this.resonanceSend.gain.value = PIANO_CONFIG.RESONANCE_SEND_INIT;
 		
         // 床鳴りと空気感を意識したバッファに変更
         this.bodyResonance = this.ctx.createConvolver();
-        this.bodyResonance.buffer = this._createReverbBuffer(3.0, 1.5, true);
+        this.bodyResonance.buffer = this._createReverbBuffer(
+            PIANO_CONFIG.BODY_RESONANCE_DURATION, 
+            PIANO_CONFIG.BODY_RESONANCE_DECAY, 
+            true
+        );
 		
         // 接続: ResonanceSend -> BodyResonance -> Master
         this.resonanceSend.connect(this.bodyResonance);
@@ -142,20 +316,24 @@ class MyJavaScriptPiano {
 		
         // コンプレッサー作成
         this.compressor = this.ctx.createDynamicsCompressor();
-        this.compressor.threshold.value = -10; // -20dBを超えたら圧縮開始
-        this.compressor.knee.value = 30;       // 滑らかに圧縮
-        this.compressor.ratio.value = 12;       // 圧縮比率
-        this.compressor.attack.value = 0.003;  // アタックの反応速度
-        this.compressor.release.value = 0.25;  // リリース
+        this.compressor.threshold.value = PIANO_CONFIG.COMPRESSOR_THRESHOLD;
+        this.compressor.knee.value = PIANO_CONFIG.COMPRESSOR_KNEE;
+        this.compressor.ratio.value = PIANO_CONFIG.COMPRESSOR_RATIO;
+        this.compressor.attack.value = PIANO_CONFIG.COMPRESSOR_ATTACK;
+        this.compressor.release.value = PIANO_CONFIG.COMPRESSOR_RELEASE;
 
         // リバーブ作成
         this.convolver = this.ctx.createConvolver();
         // ホールのような残響
-		this.convolver.buffer = this._createReverbBuffer(2.5, 2.0, false);
+		this.convolver.buffer = this._createReverbBuffer(
+            PIANO_CONFIG.REVERB_DURATION, 
+            PIANO_CONFIG.REVERB_DECAY, 
+            false
+        );
 		
         // リバーブの混ざり具合
         this.reverbGain = this.ctx.createGain();
-        this.reverbGain.gain.value = 0.4;
+        this.reverbGain.gain.value = PIANO_CONFIG.REVERB_GAIN;
 
         // マスターからコンプへ
         this.masterGain.connect(this.compressor);
@@ -168,13 +346,12 @@ class MyJavaScriptPiano {
         this.reverbGain.connect(this.convolver);
         this.convolver.connect(this.ctx.destination);
 
-
-        // 初期化いにっとinit
-        this.basePath = './44.1khz16bit';
+        // 初期化
+        this.basePath = PIANO_CONFIG.BASE_PATH;
         this.buffers = new Map();
         this.pinkNoise = new PinkNoise();
-        this.leftHand = new HandAgent(40);
-        this.rightHand = new HandAgent(70);
+        this.leftHand = new HandAgent(PIANO_CONFIG.LEFT_HAND_START);
+        this.rightHand = new HandAgent(PIANO_CONFIG.RIGHT_HAND_START);
         this.isLoading = false;
         this.onProgress = null; 
 		
@@ -184,24 +361,27 @@ class MyJavaScriptPiano {
 		
 		// Worker管理
 		this.workers = [];
-		this.workerCount = navigator.hardwareConcurrency || 4; 
+		this.workerCount = PIANO_CONFIG.WORKER_COUNT;
 		this.workerIndex = 0;
 		this.pendingRequests = new Map();
     }
 
-	// ---------WASM-------
+	// ========== WASM ENGINE SECTION ==========
+	// WASM-based audio decoding via Web Workers
+	// This entire section can be disabled by setting PIANO_CONFIG.ENABLE_WASM = false
+	
 	/**
      * Wasmの初期化
      */
 	async initWasm() {
 		const workerPromises = [];
 		for (let i = 0; i < this.workerCount; i++) {
-			const w = new Worker('./wasm/decoder-worker.js', { type: 'module' });
+			const w = new Worker(PIANO_CONFIG.WASM_WORKER_PATH, { type: 'module' });
 			
 			// Workerが準備完了したことを知らせるPromiseを作成
 			const p = new Promise((resolve) => {
 				w.onmessage = (e) => {
-					if (e.data.type === 'ready') { // Worker側から 'ready' を送るよう修正が必要
+					if (e.data.type === 'ready') {
 						resolve();
 					} else {
 						this._onWorkerMessage(e.data);
@@ -215,7 +395,7 @@ class MyJavaScriptPiano {
 		await Promise.all(workerPromises);
 		console.log(`✅ ${this.workerCount} Workers initialized and ready.`);
 	}
-	// ---------E_WASM-------
+	
 	
     /**
      * ノートとベロシティから最適なファイル名とピッチ補正値を計算
@@ -223,7 +403,7 @@ class MyJavaScriptPiano {
     getSampleMapping(midi, velocity) {
         // A,C,Ds,Fsのみを使用するマッピングロジック
         const noteIndex = midi % 12;
-        const octave = Math.floor(midi / 12) - 1; // MIDI 60 = C4
+        const octave = Math.floor(midi / 12) + PIANO_CONFIG.MIDI_BASE_OCTAVE;
 
         let targetAnchorNote = '';
         let targetOctave = octave;
@@ -231,22 +411,22 @@ class MyJavaScriptPiano {
 
         // 近くの音符をデータセットから疑似再現。
         if (noteIndex === 0) { targetAnchorNote = 'C'; detuneCents = 0; }
-        else if (noteIndex === 1) { targetAnchorNote = 'C'; detuneCents = 100; }                     // C# -> C+1
-        else if (noteIndex === 2) { targetAnchorNote = 'Ds'; detuneCents = -100; }                   // D -> Ds-1
+        else if (noteIndex === 1) { targetAnchorNote = 'C'; detuneCents = PIANO_CONFIG.DETUNE_CENT; }
+        else if (noteIndex === 2) { targetAnchorNote = 'Ds'; detuneCents = -PIANO_CONFIG.DETUNE_CENT; }
         else if (noteIndex === 3) { targetAnchorNote = 'Ds'; detuneCents = 0; }
-        else if (noteIndex === 4) { targetAnchorNote = 'Ds'; detuneCents = 100; }                    // E -> Ds+1
-        else if (noteIndex === 5) { targetAnchorNote = 'Fs'; detuneCents = -100; }                   // F -> Fs-1
+        else if (noteIndex === 4) { targetAnchorNote = 'Ds'; detuneCents = PIANO_CONFIG.DETUNE_CENT; }
+        else if (noteIndex === 5) { targetAnchorNote = 'Fs'; detuneCents = -PIANO_CONFIG.DETUNE_CENT; }
         else if (noteIndex === 6) { targetAnchorNote = 'Fs'; detuneCents = 0; }
-        else if (noteIndex === 7) { targetAnchorNote = 'Fs'; detuneCents = 100; }                    // G -> Fs+1
-        else if (noteIndex === 8) { targetAnchorNote = 'A'; detuneCents = -100; }                    // G# -> A-1
+        else if (noteIndex === 7) { targetAnchorNote = 'Fs'; detuneCents = PIANO_CONFIG.DETUNE_CENT; }
+        else if (noteIndex === 8) { targetAnchorNote = 'A'; detuneCents = -PIANO_CONFIG.DETUNE_CENT; }
         else if (noteIndex === 9) { targetAnchorNote = 'A'; detuneCents = 0; }
-        else if (noteIndex === 10) { targetAnchorNote = 'A'; detuneCents = 100; }                    // A# -> A+1
-        else if (noteIndex === 11) { targetAnchorNote = 'C'; detuneCents = -100; targetOctave++; }   // B -> Next C-1
+        else if (noteIndex === 10) { targetAnchorNote = 'A'; detuneCents = PIANO_CONFIG.DETUNE_CENT; }
+        else if (noteIndex === 11) { targetAnchorNote = 'C'; detuneCents = -PIANO_CONFIG.DETUNE_CENT; targetOctave++; }
 
-        // Velocity 1-16 mapping
-        let velIndex = Math.floor(velocity * 16);
+        // Velocity bin mapping
+        let velIndex = Math.floor(velocity * PIANO_CONFIG.MIDI_VELOCITY_BINS);
         if (velIndex < 1) velIndex = 1;
-        if (velIndex > 16) velIndex = 16;
+        if (velIndex > PIANO_CONFIG.MIDI_VELOCITY_BINS) velIndex = PIANO_CONFIG.MIDI_VELOCITY_BINS;
 
         const filename = `${targetAnchorNote}${targetOctave}v${velIndex}.wav`;
         
@@ -260,7 +440,7 @@ class MyJavaScriptPiano {
     }
 
 	/**
-     * バッファ読み込みロジック
+     * バッファ読み込みロジック（WASM対応）
      */
 	async loadBuffer(path) {
 		if (this.buffers.has(path)) return this.buffers.get(path);
@@ -294,6 +474,9 @@ class MyJavaScriptPiano {
 		}
 	}
 
+	/**
+     * WASM Worker からのメッセージハンドラ
+     */
 	_onWorkerMessage(data) {
 		const { id, pcm, count, chan } = data;
 		const callback = this.pendingRequests.get(id);
@@ -311,9 +494,8 @@ class MyJavaScriptPiano {
 		callback(audioBuffer);
 	}
 	
-	// ---------WASM-------
 	/**
-     * Wasmを使用したデコード実体
+     * Wasmを使用したデコード実体（内部用）
      */
 	_decodeWithWasm(arrayBuffer) {
 		const wasm = this.wasmInstance;
@@ -355,7 +537,7 @@ class MyJavaScriptPiano {
 
 		return audioBuffer;
 	}
-	// ---------E_WASM-------
+	// ========== END WASM ENGINE SECTION ==========
 	
     /**
      * 譜面解析とプリロード
@@ -366,31 +548,30 @@ class MyJavaScriptPiano {
 
         // 必要なファイルをリストアップ
         score.forEach(note => {
-            const map = this.getSampleMapping(note.note, note.velocity || 0.5);
+            const map = this.getSampleMapping(note.note, note.velocity || PIANO_CONFIG.DEFAULT_VELOCITY);
             filesToLoad.add(map.filename);
 
             // 打鍵音ロード
-            let keyIndex = note.note - 20;
-            if (keyIndex < 1) keyIndex = 1;
-            if (keyIndex > 88) keyIndex = 88;
+            let keyIndex = note.note - PIANO_CONFIG.KEY_OFFSET_FOR_RELEASE;
+            if (keyIndex < PIANO_CONFIG.MIN_KEY_INDEX) keyIndex = PIANO_CONFIG.MIN_KEY_INDEX;
+            if (keyIndex > PIANO_CONFIG.MAX_KEY_INDEX) keyIndex = PIANO_CONFIG.MAX_KEY_INDEX;
             filesToLoad.add(`rel${keyIndex}.wav`);
 
             // ハーモニクス
-            if (note.velocity > 0.6) {
+            if (note.velocity > PIANO_CONFIG.MIN_HARMONICS_VELOCITY) {
                 filesToLoad.add(`harmV3${map.anchorNote}${map.octave}.wav`);
             }
         });
 
         // ペダルふみふみ
-        ['pedalD1.wav', 'pedalD2.wav', 'pedalU1.wav', 'pedalU2.wav'].forEach(f => filesToLoad.add(f));
+        PIANO_CONFIG.PEDAL_FILES.forEach(f => filesToLoad.add(f));
 
-
-        const files = Array.from(filesToLoad); // SetをArrayに変換
+        const files = Array.from(filesToLoad);
         const totalFiles = files.length;
         let loadedCount = 0;
         
-        // 同時に処理するファイル数。PCのコア数やネットワーク帯域に応じて調整
-        const concurrencyLimit = navigator.hardwareConcurrency || 4; 
+        // 同時に処理するファイル数
+        const concurrencyLimit = PIANO_CONFIG.WORKER_COUNT;
 
         // files配列を小さなチャンク（塊）に分割して処理する
         for (let i = 0; i < totalFiles; i += concurrencyLimit) {
@@ -406,7 +587,6 @@ class MyJavaScriptPiano {
                 }
             });
 
-            // このチャンクの処理が終わるまで待つ
             await Promise.all(loadPromises);
         }
         
